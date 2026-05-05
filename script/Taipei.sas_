@@ -1,0 +1,202 @@
+FILENAME REFFILE '/home/u63775780/TAIPEI/Real estate valuation data set.txt.xlsx';
+
+PROC IMPORT DATAFILE=REFFILE
+	DBMS=XLSX
+	OUT=Taip;
+	GETNAMES=YES;
+RUN;
+
+PROC CONTENTS DATA=Taip; RUN;
+
+*------------------------------------------------------------------------------------------------*;
+*ICI ON RENOMME LES VARIABLES POUR QUE CE SOIT PLUS LISIBLE*;
+
+data Taip; set Taip;
+  rename 'X1 transaction date'n = dateAchat;
+  rename 'X2 house age'n= ageMaison;
+  rename 'X3 distance to the nearest MRT s'n=distanceMRT;
+  rename 'X4 number of convenience stores'n=nbreMagasin;
+  rename 'X5 latitude'n=latitude;
+  rename 'X6 longitude'n=longitude;
+  rename 'Y house price of unit area'n = prixMaison;
+ run;
+
+*ON ESSAYE DE CHANGER LA VARIABLE NBREMAGASIN EN VARIABLE QUALITATIVE*;
+data Taip; 
+   set Taip;
+   if nbreMagasin <= 3 then
+        nombre_magasins_qualitative = '0 à 3';
+    else if nbreMagasin <= 6 then
+        nombre_magasins_qualitative = '4 à 6';
+    else
+        nombre_magasins_qualitative = '6 à linfini';
+RUN;
+        
+proc means data=taip;
+   run;
+
+proc univariate data=taip;
+run;
+*******************************************
+GRAND 2 DANS LE BLOC-NOTE
+*REGRESSION SIMPLES : ON VEUT ETUDIER L'INFLUENCE DES DIFFERENTES VARIABLES*;
+*ICI ON RETROUVE LES DONNEES DES VARIABLES : MOYENNE MINI ET MAX ----> on peut voir quels sont les variables qui influent le plus sur le prix des maison*;
+
+
+proc sgplot data=taip;
+  scatter x=ageMaison y=prixMaison ;
+  title "relation entre ageMaison et prixMaison";
+run;
+
+proc sgplot data=taip;
+  scatter x=dateAchat y=nbreMagasin / group=nombre_magasins_qualitative;
+  title "relation entre dateAchat et nbreMagasin";
+run;
+
+proc sgplot data=taip;
+  scatter x=distanceMRT y=prixMaison ;
+  title "relation entre distanceMRT et prixMaison";
+run;
+
+proc sgplot data=taip;
+  scatter x=nbreMagasin y=prixMaison /  group=nombre_magasins_qualitative;
+  title "relation entre nbreMagasin et prixMaison";
+run;
+
+proc sgplot data=taip;
+  scatter x=distanceMRT y=nbreMagasin /  group=nombre_magasins_qualitative;
+  title "relation entre distanceMRT et nbreMagasin";
+run;
+
+proc sgplot data=taip;
+    scatter x=nbreMagasin y=longitude / group=nombre_magasins_qualitative;
+    title "relation entre nombre magasin et longitude (avec nbremagasin qualitative)";
+run;
+
+proc sgplot data=taip;
+    scatter x=nbreMagasin y=latitude / group=nombre_magasins_qualitative;
+    title "relation entre nombre magasin et latitude (avec nbremagasin qualitative)";
+run;
+
+proc anova data=taip;
+    class nombre_magasins_qualitative;
+    model prixMaison = nombre_magasins_qualitative;
+run;
+
+proc sgplot data=taip;
+    scatter x=nbreMagasin y=ageMaison / group=nombre_magasins_qualitative;
+    title "relation entre nombre magasin et ageMaison (avec nbremagasin qualitative)";
+run;
+
+proc sgplot data=taip;
+   scatter x=dateAchat y=prixMaison;
+   title 'relation entre dateAchat et prixMaison';
+run;
+
+
+*-----------------------------------------------------------------------------------------------------*;
+*ICI ON A LATITUDE + LONGITUDE *;
+
+proc gplot data = taip;
+  bubble longitude*latitude=prixmaison / bscale = radius bsize = 300;
+run;quit;
+
+*GRAND 4 BLOC-NOTE *;
+proc reg data=taip;
+model prixMaison = dateAchat;
+run;
+
+proc reg data=taip;
+   model prixMaison = ageMaison;
+run;
+
+proc reg data=taip;
+   model prixMaison = distanceMRT;
+run;
+
+proc reg data=taip;
+   model prixMaison = nbreMagasin;
+run;
+
+proc reg data=taip;
+   model prixMaison = latitude;
+run;
+
+proc reg data=taip;
+   model prixMaison = longitude;
+run;
+proc GLM data=taip;
+   class nombre_magasins_qualitative;
+   model prixMaison = nombre_magasins_qualitative;
+run;
+*GRAND 5 BLOC-NOTE*;
+
+*cas où nbremagasin est une variable quantitative*;
+proc reg data=taip;
+   model prixMaison = dateAchat ageMaison distanceMRT nbreMagasin latitude longitude; 
+run;
+
+*ici on essaye de faire une regression multiple mais avec la variable nbre_magasin en version qualitative*;
+data taip;
+    set taip;
+    if nbreMagasin <= 3 then do;
+        magasins_0_3 = 1;
+        magasins_4_6 = 0;
+        magasins_6_inf = 0;
+    end;
+    else if nbreMagasin <= 6 then do;
+        magasins_0_3 = 0;
+        magasins_4_6 = 1;
+        magasins_6_inf = 0;
+    end;
+    else do;
+        magasins_0_3 = 0;
+        magasins_4_6 = 0;
+        magasins_6_inf = 1;
+    end;
+run;
+
+proc reg data=taip;
+   model prixMaison = dateAchat ageMaison distanceMRT latitude longitude magasins_0_3 magasins_4_6 magasins_6_inf; 
+run;
+ ** y a t-il un autre moyen de faire ça ?*;
+ 
+proc GLMselect data=taip;
+   class nombre_magasins_qualitative;
+   model prixMaison = dateAchat ageMaison distanceMRT nombre_magasins_qualitative latitude longitude /selection=stepwise; 
+run;
+proc glmselect data=taip;
+   class nombre_magasins_qualitative;
+   model prixMaison = dateAchat ageMaison distanceMRT nombre_magasins_qualitative latitude longitude / selection=forward; 
+run;
+
+
+
+* on teste plusieurs méthode qui ammèneront à plusieurs modèles qu'on étudiera (tjrs avec nombremagasin en variable quantitative) *;
+proc reg data=taip;
+   model prixMaison = dateAchat ageMaison distanceMRT nbreMagasin latitude longitude / selection=stepwise;
+run;
+
+*AVEC CA ON TROUVE UN MODELE AVEC 5 VARIABLES SIGNIFICATIVES SUR 6*;
+
+proc reg data=taip;
+   model prixMaison = dateAchat ageMaison distanceMRT nbreMagasin latitude longitude / selection=forward;
+run;
+
+proc reg data=taip;
+   model prixMaison =  ageMaison distanceMRT nbreMagasin latitude longitude / selection=backward;
+run;
+*ON REGARDE ENSUITE LES P-VALEURS ET LES PR>F AFIN DE CHOISIR LE MEILLEUR MODELE*;
+
+or
+*--------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
